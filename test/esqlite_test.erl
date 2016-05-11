@@ -10,6 +10,10 @@ open_single_database_test() ->
     {ok, _C1} = esqlite3:open("test.db"),
     ok.
 
+open_single_readonly_database_test() ->
+    {ok, _C1} = esqlite3:open_readonly("test.db"),
+    ok.
+
 open_multiple_same_databases_test() ->
     {ok, _C1} = esqlite3:open("test.db"),
     {ok, _C2} = esqlite3:open("test.db"),

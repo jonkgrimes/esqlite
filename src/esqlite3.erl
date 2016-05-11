@@ -22,6 +22,7 @@
 
 %% higher-level export
 -export([open/1, open/2,
+         open_readonly/1, open_readonly/2,
          exec/2, exec/3,
          changes/1, changes/2,
          insert/2,
@@ -60,6 +61,29 @@ open(Filename, Timeout) ->
 
     Ref = make_ref(),
     ok = esqlite3_nif:open(Connection, Ref, self(), Filename),
+    case receive_answer(Ref, Timeout) of
+        ok ->
+            {ok, {connection, make_ref(), Connection}};
+        {error, _Msg}=Error ->
+            Error
+    end.
+
+%% @doc Opens a sqlite3 database mentioned in Filename in readonly mode.
+%%
+-spec open_readonly(FileName) -> {ok, connection()} | {error, _} when
+      FileName :: string().
+open_readonly(Filename) ->
+    open_readonly(Filename, ?DEFAULT_TIMEOUT).
+
+%% @doc Open a readonly database connection
+%%
+-spec open_readonly(Filename, timeout()) -> {ok, connection()} | {error, _} when
+      Filename :: string().
+open_readonly(Filename, Timeout) ->
+    {ok, Connection} = esqlite3_nif:start(),
+
+    Ref = make_ref(),
+    ok = esqlite3_nif:open_readonly(Connection, Ref, self(), Filename),
     case receive_answer(Ref, Timeout) of
         ok ->
             {ok, {connection, make_ref(), Connection}};

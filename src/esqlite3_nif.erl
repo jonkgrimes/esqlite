@@ -23,6 +23,7 @@
 %% low-level exports
 -export([start/0,
          open/4,
+         open_readonly/4,
          exec/4,
          changes/3,
          insert/4,
@@ -60,6 +61,16 @@ start() ->
 %%  @spec open(connection(), reference(), pid(), string()) -> ok | {error, message()}
 
 open(_Db, _Ref, _Dest, _Filename) ->
+    erlang:nif_error(nif_library_not_loaded).
+
+%% @doc Open the specified sqlite3 database in read only mode.
+%%
+%% Sends an asynchronous open command over the connection and returns
+%% ok immediately. When the database is opened
+%%
+%%  @spec open_readonly(connection(), reference(), pid(), string()) -> ok | {error, message()}
+%%
+open_readonly(_Db, _Ref, _Dest, _Filename) ->
     erlang:nif_error(nif_library_not_loaded).
 
 %% @doc Exec the query.

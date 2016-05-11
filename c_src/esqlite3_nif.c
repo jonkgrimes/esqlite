@@ -48,10 +48,10 @@ typedef struct {
     sqlite3_stmt *statement;
 } esqlite_statement;
 
-
 typedef enum {
     cmd_unknown,
     cmd_open,
+    cmd_open_readonly,
     cmd_exec,
     cmd_changes,
     cmd_prepare,
@@ -259,6 +259,34 @@ do_open(ErlNifEnv *env, esqlite_connection *db, const ERL_NIF_TERM arg)
     /* Open the database. 
      */
     rc = sqlite3_open(filename, &db->db);
+    if(rc != SQLITE_OK) {
+	    error = make_sqlite3_error_tuple(env, rc, db->db);
+	    sqlite3_close_v2(db->db);
+	    db->db = NULL;
+     
+	    return error;
+    }
+
+    sqlite3_busy_timeout(db->db, 2000);
+
+    return make_atom(env, "ok");
+}
+
+static ERL_NIF_TERM
+do_open_readonly(ErlNifEnv *env, esqlite_connection *db, const ERL_NIF_TERM arg)
+{
+    char filename[MAX_PATHNAME];
+    unsigned int size;
+    int rc;
+    ERL_NIF_TERM error;
+
+    size = enif_get_string(env, arg, filename, MAX_PATHNAME, ERL_NIF_LATIN1);
+    if(size <= 0) 
+        return make_error_tuple(env, "invalid_filename");
+
+    /* Open the database. 
+     */
+    rc = sqlite3_open_v2(filename, &db->db, SQLITE_OPEN_READONLY, NULL);
     if(rc != SQLITE_OK) {
 	    error = make_sqlite3_error_tuple(env, rc, db->db);
 	    sqlite3_close_v2(db->db);
@@ -622,6 +650,8 @@ evaluate_command(esqlite_command *cmd, esqlite_connection *conn)
     switch(cmd->type) {
     case cmd_open:
 	    return do_open(cmd->env, conn, cmd->arg);
+    case cmd_open_readonly:
+      return do_open_readonly(cmd->env, conn, cmd->arg);
     case cmd_exec:
 	    return do_exec(cmd->env, conn, cmd->arg);
     case cmd_changes:
@@ -746,6 +776,35 @@ esqlite_open(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 	    return make_error_tuple(env, "command_create_failed");
 
     cmd->type = cmd_open;
+    cmd->ref = enif_make_copy(cmd->env, argv[1]);
+    cmd->pid = pid;
+    cmd->arg = enif_make_copy(cmd->env, argv[3]);
+
+    return push_command(env, db, cmd);
+}
+
+static ERL_NIF_TERM
+esqlite_open_readonly(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+    esqlite_connection *db;
+    esqlite_command *cmd = NULL;
+    ErlNifPid pid;
+     
+    if(argc != 4) 
+	    return enif_make_badarg(env);     
+    if(!enif_get_resource(env, argv[0], esqlite_connection_type, (void **) &db))
+	    return enif_make_badarg(env);
+    if(!enif_is_ref(env, argv[1])) 
+	    return make_error_tuple(env, "invalid_ref");
+    if(!enif_get_local_pid(env, argv[2], &pid)) 
+	    return make_error_tuple(env, "invalid_pid");
+
+    /* Note, no check is made for the type of the argument */
+    cmd = command_create();
+    if(!cmd) 
+	    return make_error_tuple(env, "command_create_failed");
+
+    cmd->type = cmd_open_readonly;
     cmd->ref = enif_make_copy(cmd->env, argv[1]);
     cmd->pid = pid;
     cmd->arg = enif_make_copy(cmd->env, argv[3]);
@@ -1132,6 +1191,7 @@ static int on_upgrade(ErlNifEnv* env, void** priv, void** old_priv_data, ERL_NIF
 static ErlNifFunc nif_funcs[] = {
     {"start", 0, esqlite_start},
     {"open", 4, esqlite_open},
+    {"open_readonly", 4, esqlite_open_readonly},
     {"exec", 4, esqlite_exec},
     {"changes", 3, esqlite_changes},
     {"prepare", 4, esqlite_prepare},
